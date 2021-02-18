@@ -8,7 +8,7 @@ namespace MAHA_Dyno
 {
     public class MAHADynoService
     {
-        private readonly int sleep = 100;
+        private readonly int sleep = 1;
         private readonly int tryCnt = 10;
         protected IUARTService _uartService;
 
@@ -39,13 +39,13 @@ namespace MAHA_Dyno
             s[2] = 'C';
             s[3] = (char)0x05;
 
-            _uartService.Send(s.ToString());
+            _uartService.Send(s);
 
             string power = "";
             string torque = "";
             string speed = "";
 
-            for (int i = 0; i < 50; i++)
+            for (int i = 0; i < 51; i++)
             {
                 int t = Read();
                 if(t == -1) goto badTestValues;
@@ -61,11 +61,11 @@ namespace MAHA_Dyno
                     power += c;
                 }
                 if (i == 11 && c != ' ') goto badTestValues;
-                if (i == 12 && c != 'h') goto badTestValues;
+                if (i == 12 && c != 'H') goto badTestValues;
                 if (i == 13 && c != 'p') goto badTestValues;
-                if (i == 14 && c != '\n') goto badTestValues;
+                if (i == 14 && c != '\r') goto badTestValues;
                 if (i == 15 && c != '2') goto badTestValues;
-                if (i == 16 && c != '2') goto badTestValues;
+                if (i == 16 && c != '3') goto badTestValues;
                 if (i == 17 && c != '1') goto badTestValues;
                 if (i == 18 && c != '=') goto badTestValues;
                 if (i > 18 && i < 26)
@@ -76,26 +76,26 @@ namespace MAHA_Dyno
                 if (i == 27 && c != 'l') goto badTestValues;
                 if (i == 28 && c != 'b') goto badTestValues;
                 if (i == 29 && c != 'f') goto badTestValues;
-                if (i == 30 && c != '\n') goto badTestValues;
+                if (i == 30 && c != '\r') goto badTestValues;
                 if (i == 31 && c != '2') goto badTestValues;
                 if (i == 32 && c != '0') goto badTestValues;
                 if (i == 33 && c != '9') goto badTestValues;
                 if (i == 34 && c != '=') goto badTestValues;
-                if (i > 34 && i < 41)
+                if (i > 34 && i < 42)
                 {
                     speed += c;
                 }
-                if (i == 41 && c != ' ') goto badTestValues;
-                if (i == 42 && c != 'm') goto badTestValues;
-                if (i == 43 && c != 'p') goto badTestValues;
-                if (i == 44 && c != 'h') goto badTestValues;
-                if (i == 45 && c != '\n') goto badTestValues;
-                if (i == 46 && c != 0x17) goto badTestValues;
-                if (i == 47 || i == 48)
+                if (i == 42 && c != ' ') goto badTestValues;
+                if (i == 43 && c != 'm') goto badTestValues;
+                if (i == 44 && c != 'p') goto badTestValues;
+                if (i == 45 && c != 'h') goto badTestValues;
+                if (i == 46 && c != '\r') goto badTestValues;
+                if (i == 47 && c != 0x17) goto badTestValues;
+                if (i == 48 || i == 49)
                 {
                     //todo do check checksum
                 }
-                if (i == 49 && c != '$') goto badTestValues;
+                if (i == 50 && c != '$') goto badTestValues;
             }
 
             DynoTestValues testValues = new DynoTestValues();
@@ -119,7 +119,7 @@ namespace MAHA_Dyno
             s[2] = 'D';
             s[3] = (char)0x05;
 
-            _uartService.Send(s.ToString());
+            _uartService.Send(s);
 
             MAHADynoStatus status = new MAHADynoStatus();
 
@@ -184,7 +184,7 @@ namespace MAHA_Dyno
             s[5] = variableString[2];
             s[6] = (char)0x05;
 
-            _uartService.Send(s.ToString());
+            _uartService.Send(s);
 
             int t;
 
@@ -240,7 +240,7 @@ namespace MAHA_Dyno
                 variableString = "0" + variableString;
 
 
-            char[] s = new char[9 + variableValue.Length];
+            char[] s = new char[11 + variableValue.Length];
             s[0] = (char)0xB4;
             s[1] = (char)0x11;
             s[2] = 'F';
@@ -250,21 +250,23 @@ namespace MAHA_Dyno
             s[6] = '=';
 
             for (int i = 0; i < variableValue.Length; i++)
-                s[6 + i] = variableValue[i];
+                s[7 + i] = variableValue[i];
+
+            s[7 + variableValue.Length] = (char)0x17;
 
             //todo create and add checksum;
             char xor = s[1];
-            for (int i = 2; i < 6 + variableValue.Length; i++)
+            for (int i = 2; i < 8 + variableValue.Length; i++)
                 xor ^= s[i];
 
             //the only way i can see the xor taking 2 bytes is as a string
             string checksumstring = Convert.ToByte(xor).ToString("x2").ToUpper();
-            s[6 + variableValue.Length] = checksumstring[0];
-            s[7 + variableValue.Length] = checksumstring[1];
+            s[8 + variableValue.Length] = checksumstring[0];
+            s[9 + variableValue.Length] = checksumstring[1];
 
-            s[8 + variableValue.Length] = '$';
+            s[10 + variableValue.Length] = '$';
 
-            _uartService.Send(s.ToString());
+            _uartService.Send(s);
 
             int t = Read();
 
@@ -278,7 +280,7 @@ namespace MAHA_Dyno
             s[1] = (char)0x11;
             s[2] = c;
 
-            _uartService.Send(s.ToString());
+            _uartService.Send(s);
 
             int t = Read();
 

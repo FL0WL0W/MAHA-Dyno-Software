@@ -27,7 +27,7 @@ namespace MAHA_Dyno
         private bool _readNextVariable = false;
         private int _nextReadVariable = -1;
         private string _nextReadVariableValue = "";
-        private Thread _updaterThread;
+        private Task _updaterTask;
 
         public DynoForm()
         {
@@ -47,21 +47,22 @@ namespace MAHA_Dyno
                 _currentValues = values;
                 if (_currentValues != null)
                 {
-                    circularProgressBarSpeed.Value = (int)Math.Min(Math.Max(circularProgressBarSpeed.Minimum, _currentValues.Speed), circularProgressBarSpeed.Maximum);
-                    circularProgressBarTorque.Value = (int)Math.Min(Math.Max(circularProgressBarTorque.Minimum, _currentValues.Torque), circularProgressBarTorque.Maximum);
-                    circularProgressBarPower.Value = (int)Math.Min(Math.Max(circularProgressBarPower.Minimum, _currentValues.Speed), circularProgressBarPower.Maximum);
                     circularProgressBarSpeed.SubscriptText = ((int)_currentValues.Speed).ToString();
                     circularProgressBarTorque.SubscriptText = ((int)_currentValues.Torque).ToString();
                     circularProgressBarPower.SubscriptText = ((int)_currentValues.Power).ToString();
+                    circularProgressBarSpeed.Value = (int)Math.Min(Math.Max(circularProgressBarSpeed.Minimum, _currentValues.Speed), circularProgressBarSpeed.Maximum);
+                    circularProgressBarTorque.Value = (int)Math.Min(Math.Max(circularProgressBarTorque.Minimum, _currentValues.Torque), circularProgressBarTorque.Maximum);
+                    circularProgressBarPower.Value = (int)Math.Min(Math.Max(circularProgressBarPower.Minimum, _currentValues.Power), circularProgressBarPower.Maximum);
+                    this.Refresh();
                 }
                 else
                 {
-                    circularProgressBarSpeed.Value = circularProgressBarSpeed.Minimum;
-                    circularProgressBarTorque.Value = circularProgressBarTorque.Minimum;
-                    circularProgressBarPower.Value = circularProgressBarPower.Minimum;
                     circularProgressBarSpeed.SubscriptText = "N/A";
                     circularProgressBarTorque.SubscriptText = "N/A";
                     circularProgressBarPower.SubscriptText = "N/A";
+                    circularProgressBarSpeed.Value = circularProgressBarSpeed.Minimum;
+                    circularProgressBarTorque.Value = circularProgressBarTorque.Minimum;
+                    circularProgressBarPower.Value = circularProgressBarPower.Minimum;
                 }
             }
         }
@@ -79,15 +80,15 @@ namespace MAHA_Dyno
                 _currentStatus = status;
                 if (_currentStatus != null)
                 {
-                    if (_currentStatus.LiftBeamDown)
-                    {
-                        buttonLiftBeam.Text = "Up";
-                        labelLiftBeam.Text = "Lift Beam: Down";
-                    }
                     if (_currentStatus.LiftBeamUp)
                     {
                         buttonLiftBeam.Text = "Down";
                         labelLiftBeam.Text = "Lift Beam: Up";
+                    }
+                    if (_currentStatus.LiftBeamDown)
+                    {
+                        buttonLiftBeam.Text = "Up";
+                        labelLiftBeam.Text = "Lift Beam: Down";
                     }
                     if (_currentStatus.DrivingMotorRunning)
                     {
@@ -103,14 +104,15 @@ namespace MAHA_Dyno
 
                 if (_currentValues != null && _currentStatus != null)
                 {
+                    buttonStartLog.Enabled = true;
                     buttonSpeedRegulator.Enabled = true;
                     textBoxVariable.Enabled = true;
                     numericUpDownVariable.Enabled = true;
                     buttonVariableWrite.Enabled = true;
-                    if (_currentValues.Speed > 0)
+                    if (_currentValues.Speed > 1)
                     {
                         buttonLiftBeam.Enabled = false;
-                        if (buttonLiftBeam.Text != "Down" && buttonDriveMotor.Text != "On")
+                        if (buttonLiftBeam.Text != "Down" || buttonDriveMotor.Text != "On")
                             buttonDriveMotor.Enabled = true;
                         else
                             buttonDriveMotor.Enabled = false;
@@ -126,6 +128,7 @@ namespace MAHA_Dyno
                 }
                 else
                 {
+                    buttonStartLog.Enabled = false;
                     buttonSpeedRegulator.Enabled = false;
                     buttonLiftBeam.Enabled = false;
                     buttonDriveMotor.Enabled = false;
@@ -228,7 +231,9 @@ namespace MAHA_Dyno
         private void comboBoxSerialPort_Click(object sender, EventArgs e)
         {
             comboBoxSerialPort.Items.Clear();
-            comboBoxSerialPort.Items.AddRange(SerialPort.GetPortNames());
+            List<string> ports = new List<string>(SerialPort.GetPortNames());
+            ports.Add("debug");
+            comboBoxSerialPort.Items.AddRange(ports.ToArray());
         }
 
         private void comboBoxSerialPort_SelectedIndexChanged(object sender, EventArgs e)
@@ -248,25 +253,25 @@ namespace MAHA_Dyno
             }
         }
 
-        private bool SendControlWord(char c)
+        private void SendControlWord(char c)
         {
             _nextControlWord = c;
             _sendNextControlWord = true;
 
-            int cnt = 0;
-            while (_sendNextControlWord && cnt < 50)
-            {
-                Thread.Sleep(10);
-                cnt++;
-            }
-
-            if (_sendNextControlWord)
-            {
-                _sendNextControlWord = false;
-                _nextControlWord = ' ';
-                return false;
-            }
-            return true;
+            //int cnt = 0;
+            //while (_sendNextControlWord && cnt < 50)
+            //{
+            //    Thread.Sleep(10);
+            //    cnt++;
+            //}
+            //
+            //if (_sendNextControlWord)
+            //{
+            //    _sendNextControlWord = false;
+            //    _nextControlWord = ' ';
+            //    return false;
+            //}
+            //return true;
         }
 
         private bool WriteVariable(int variable, string value)
@@ -316,7 +321,7 @@ namespace MAHA_Dyno
             return _nextReadVariableValue;
         }
 
-        private void UpdaterThread()
+        public void UpdaterThread()
         {
             while (true)
             {
@@ -336,7 +341,10 @@ namespace MAHA_Dyno
                     }
                     if (_sendNextControlWord)
                     {
-                        _dynoService.SendControlWord(_nextControlWord);
+                        if(_dynoService.SendControlWord(_nextControlWord))
+                            Invoke((MethodInvoker)delegate () { richTextBoxLog.Text = "Sent Control Word: " + _nextControlWord + "\n" + richTextBoxLog.Text;  });
+                        else
+                            Invoke((MethodInvoker)delegate () { richTextBoxLog.Text = "Failed to Send Control Word: " + _nextControlWord + "\n" + richTextBoxLog.Text; });
                         _nextControlWord = ' ';
                         _sendNextControlWord = false;
                     }
@@ -346,26 +354,25 @@ namespace MAHA_Dyno
                         _nextReadVariable = -1;
                         _readNextVariable = false;
                     }
-
+                    
                     UpdateTestValues(_dynoService.GetDynoTestNumbers());
                     if (!_getTestValuesOnly)
                     {
                         UpdateStatus(_dynoService.GetDynoStatus());
                     }
                 }
-                Thread.Sleep(Math.Max(1, (int)(before.AddMilliseconds(100) - DateTime.Now).TotalMilliseconds));
+                Thread.Sleep(Math.Max(1, (int)(before.AddMilliseconds(200) - DateTime.Now).TotalMilliseconds));
             }
         }
+        int test = 0;
 
         private void DynoForm_Load(object sender, EventArgs e)
         {
-            _updaterThread = new Thread(new ThreadStart(UpdaterThread));
-            _updaterThread.Start();
+            _updaterTask = Task.Run(new Action(UpdaterThread));
         }
 
         private void DynoForm_FormClosing(object sender, FormClosingEventArgs e)
         {
-            _updaterThread.Abort();
         }
 
         private string _variableValue = "";
@@ -389,6 +396,16 @@ namespace MAHA_Dyno
         {
             _variableValue = textBoxVariable.Text = ReadVariable((int)numericUpDownVariable.Value);
             textBoxVariable.BackColor = Color.White;
+        }
+
+        private void chartDyno_Click(object sender, EventArgs e)
+        {
+            buttonStartLog.Select();
+        }
+
+        private void buttonStartLog_Click(object sender, EventArgs e)
+        {
+
         }
     }
 }

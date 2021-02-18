@@ -8,7 +8,7 @@ namespace MAHA_Dyno
 {
     public interface IUARTService
     {
-        void Send(string val);
+        void Send(char[] arr);
         string ReadLine();
         int Read();
     }
